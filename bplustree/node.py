@@ -4,7 +4,7 @@ import math
 from typing import Optional
 
 from .const import (ENDIAN, NODE_TYPE_BYTES, USED_PAGE_LENGTH_BYTES,
-                    PAGE_REFERENCE_BYTES, TreeConf, USED_KEY_LENGTH_BYTES)
+                    PAGE_REFERENCE_BYTES, TreeConf, USED_KEY_LENGTH_BYTES, USED_VALUE_LENGTH_BYTES)
 from .entry import Entry, Record, Reference, OpaqueData
 
 
@@ -68,9 +68,9 @@ class Node(metaclass=abc.ABCMeta):
             entry_length = self._entry_class(self._tree_conf).length
         except AttributeError:
             # For Nodes that can hold a single variable sized Entry
-            entry_length = used_page_length - end_hash
+            entry_length = used_page_length - (end_used_hash_length + self._tree_conf.hash_size)
 
-        for start_offset in range(end_hash, used_page_length, entry_length):
+        for start_offset in range((end_used_hash_length + self._tree_conf.hash_size), used_page_length, entry_length):
             entry_data = data[start_offset:start_offset + entry_length]
             entry = self._entry_class(self._tree_conf, data=entry_data)
             self.entries.append(entry)
@@ -93,7 +93,20 @@ class Node(metaclass=abc.ABCMeta):
                 next_page.to_bytes(PAGE_REFERENCE_BYTES, ENDIAN)
         )
 
-        data = bytearray(header) + data
+        hash_as_bytes = self._tree_conf.hash_serializer.serialize(
+            self._hash, self._tree_conf.hash_size
+        )
+        used_hash_length = len(hash_as_bytes)
+
+        data = (
+                bytearray(header) +
+
+                used_hash_length.to_bytes(USED_VALUE_LENGTH_BYTES, ENDIAN) +
+                hash_as_bytes +
+                bytes(self._tree_conf.hash_size - used_hash_length) +
+
+                data
+        )
 
         padding = self._tree_conf.page_size - used_page_length
         assert padding >= 0
@@ -137,6 +150,10 @@ class Node(metaclass=abc.ABCMeta):
     def num_children(self) -> int:
         """Number of entries or other nodes connected to the node."""
         return len(self.entries)
+
+    @property
+    def hash_(self):
+        return self._hash
 
     def pop_smallest(self) -> Entry:
         """Remove and return the smallest entry."""
