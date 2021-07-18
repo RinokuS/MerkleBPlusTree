@@ -1,6 +1,7 @@
 import abc
 import bisect
 import math
+from hashlib import blake2b
 from typing import Optional
 
 from .const import (ENDIAN, NODE_TYPE_BYTES, USED_PAGE_LENGTH_BYTES,
@@ -40,14 +41,11 @@ class Node(metaclass=abc.ABCMeta):
             data[end_used_page_length:end_header], ENDIAN
         )
 
-        start_used_hash_length = (
-                end_header + self._tree_conf.key_size
-        )
         end_used_hash_length = (
-                start_used_hash_length + USED_KEY_LENGTH_BYTES
+                end_header + USED_KEY_LENGTH_BYTES
         )
         used_hash_length = int.from_bytes(
-            data[start_used_hash_length:end_used_hash_length], ENDIAN
+            data[end_header:end_used_hash_length], ENDIAN
         )
         assert 0 <= used_hash_length <= self._tree_conf.hash_size
 
@@ -68,9 +66,9 @@ class Node(metaclass=abc.ABCMeta):
             entry_length = self._entry_class(self._tree_conf).length
         except AttributeError:
             # For Nodes that can hold a single variable sized Entry
-            entry_length = used_page_length - (end_used_hash_length + self._tree_conf.hash_size)
+            entry_length = used_page_length - end_header
 
-        for start_offset in range((end_used_hash_length + self._tree_conf.hash_size), used_page_length, entry_length):
+        for start_offset in range((end_used_hash_length + self._tree_conf.hash_size), (used_page_length + self._tree_conf.hash_size + 1), entry_length):
             entry_data = data[start_offset:start_offset + entry_length]
             entry = self._entry_class(self._tree_conf, data=entry_data)
             self.entries.append(entry)
@@ -108,7 +106,7 @@ class Node(metaclass=abc.ABCMeta):
                 data
         )
 
-        padding = self._tree_conf.page_size - used_page_length
+        padding = self._tree_conf.page_size - (used_page_length + USED_VALUE_LENGTH_BYTES + self._tree_conf.hash_size)
         assert padding >= 0
         data.extend(bytearray(padding))
         assert len(data) == self._tree_conf.page_size
@@ -119,7 +117,8 @@ class Node(metaclass=abc.ABCMeta):
     def max_payload(self) -> int:
         """Size in bytes of serialized payload a Node can carry."""
         return (
-                self._tree_conf.page_size - 4 - PAGE_REFERENCE_BYTES
+                self._tree_conf.page_size - 4 - PAGE_REFERENCE_BYTES -
+                USED_VALUE_LENGTH_BYTES - self._tree_conf.hash_size
         )
 
     @property
@@ -154,6 +153,23 @@ class Node(metaclass=abc.ABCMeta):
     @property
     def hash_(self):
         return self._hash
+
+    def compute_hash(self, mem):
+        _hash = blake2b()
+
+        if self._entry_class == Record:
+            for i in self.entries:
+                _hash.update(str(i).encode())
+        elif self._entry_class == Reference:
+            for i in self.entries:
+                if i == self.entries[0]:
+                    left = mem.get_node(i.before)
+                    _hash.update(left.hash_.encode())
+
+                right = mem.get_node(i.after)
+                _hash.update(right.hash_.encode())
+
+        self._hash = _hash.hexdigest()
 
     def pop_smallest(self) -> Entry:
         """Remove and return the smallest entry."""

@@ -25,12 +25,12 @@ class BPlusTree:
 
     # ######################### Public API ################################
 
-    def __init__(self, filename: str, page_size: int= 12288, order: int=100,
-                 key_size: int=8, value_size: int=32, cache_size: int=64,
+    def __init__(self, filename: str, page_size: int= 4096, order: int=100,
+                 key_size: int=16, value_size: int=16, cache_size: int=0,
                  serializer: Optional[Serializer]=None):
         self._filename = filename
         self._tree_conf = TreeConf(
-            page_size, order, key_size, value_size, 64,
+            page_size, order, key_size, value_size, 128,
             serializer or IntSerializer(),
             StrSerializer()
         )
@@ -113,10 +113,18 @@ class BPlusTree:
 
             if node.can_add_entry:
                 node.insert_entry(record)
-                self._mem.set_node(node)
+                #self._mem.set_node(node)
             else:
                 node.insert_entry(record)
                 self._split_leaf(node)
+                node = self._search_in_tree(node.entries[0].key, self._root_node)
+
+            curr_node = node
+            while curr_node is not None:
+                curr_node.compute_hash(self._mem)
+                self._mem.set_node(curr_node)
+
+                curr_node = curr_node.parent
 
     def batch_insert(self, iterable: Iterable):
         """Insert many elements in the tree at once.
@@ -353,17 +361,30 @@ class BPlusTree:
             # Convert the LonelyRoot into a Leaf
             old_node = old_node.convert_to_leaf()
             self._create_new_root(ref)
+
+            old_node.next_page = new_node.page
+
+            new_node.compute_hash(self._mem)
+            self._mem.set_node(old_node)
+            self._mem.set_node(new_node)
         elif parent.can_add_entry:
             parent.insert_entry(ref)
             self._mem.set_node(parent)
+
+            old_node.next_page = new_node.page
+
+            new_node.compute_hash(self._mem)
+            self._mem.set_node(old_node)
+            self._mem.set_node(new_node)
         else:
             parent.insert_entry(ref)
+            old_node.next_page = new_node.page
+
+            new_node.compute_hash(self._mem)
+            self._mem.set_node(old_node)
+            self._mem.set_node(new_node)
+
             self._split_parent(parent)
-
-        old_node.next_page = new_node.page
-
-        self._mem.set_node(old_node)
-        self._mem.set_node(new_node)
 
     def _split_parent(self, old_node: Node):
         parent = old_node.parent
@@ -379,15 +400,24 @@ class BPlusTree:
             # Convert the Root into an Internal
             old_node = old_node.convert_to_internal()
             self._create_new_root(ref)
+
+            new_node.compute_hash(self._mem)
+            self._mem.set_node(old_node)
+            self._mem.set_node(new_node)
         elif parent.can_add_entry:
             parent.insert_entry(ref)
             self._mem.set_node(parent)
+
+            new_node.compute_hash(self._mem)
+            self._mem.set_node(old_node)
+            self._mem.set_node(new_node)
         else:
             parent.insert_entry(ref)
-            self._split_parent(parent)
+            new_node.compute_hash(self._mem)
+            self._mem.set_node(old_node)
+            self._mem.set_node(new_node)
 
-        self._mem.set_node(old_node)
-        self._mem.set_node(new_node)
+            self._split_parent(parent)
 
     def _create_new_root(self, reference: Reference):
         new_root = self.RootNode(page=self._mem.next_available_page)

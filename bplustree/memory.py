@@ -140,8 +140,8 @@ class FileMemory:
         back.
         """
         node = self._cache.get(page)
-        if node is not None:
-            return node
+        #if node is not None:
+        #    return node
 
         data = self._wal.get_page(page)
         if not data:

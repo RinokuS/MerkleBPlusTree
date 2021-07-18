@@ -4,7 +4,7 @@ from bplustree.entry import Record, Reference, OpaqueData, NOT_LOADED
 from bplustree.const import TreeConf
 from bplustree.serializer import IntSerializer, StrSerializer
 
-tree_conf = TreeConf(4096, 4, 16, 16, 64, IntSerializer(), StrSerializer())
+tree_conf = TreeConf(4096, 4, 16, 16, 128, IntSerializer(), StrSerializer())
 
 
 def test_record_int_serialization():
@@ -14,12 +14,11 @@ def test_record_int_serialization():
     r2 = Record(tree_conf, data=data)
     assert r1 == r2
     assert r1.value == r2.value
-    assert r1.hash_ == r2.hash_
     assert r1.overflow_page == r2.overflow_page
 
 
 def test_record_str_serialization():
-    tree_conf = TreeConf(4096, 4, 40, 40, 64, StrSerializer(), StrSerializer())
+    tree_conf = TreeConf(4096, 4, 40, 40, 128, StrSerializer(), StrSerializer())
     r1 = Record(tree_conf, '0', b'0')
     data = r1.dump()
 
@@ -87,7 +86,7 @@ def test_reference_int_serialization():
 
 
 def test_reference_str_serialization():
-    tree_conf = TreeConf(4096, 4, 40, 40, 64, StrSerializer(), StrSerializer())
+    tree_conf = TreeConf(4096, 4, 40, 40, 128, StrSerializer(), StrSerializer())
     r1 = Reference(tree_conf, 'foo', 1, 2)
     data = r1.dump()
 

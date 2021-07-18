@@ -13,7 +13,7 @@ from bplustree.const import TreeConf
 from .conftest import filename
 from bplustree.serializer import IntSerializer, StrSerializer
 
-tree_conf = TreeConf(4096, 4, 16, 16, 64, IntSerializer(), StrSerializer())
+tree_conf = TreeConf(4096, 4, 16, 16, 128, IntSerializer(), StrSerializer())
 node = LeafNode(tree_conf, page=3)
 
 

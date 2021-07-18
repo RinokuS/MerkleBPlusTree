@@ -44,7 +44,7 @@ def test_initial_values():
     b = BPlusTree(filename, page_size=512, value_size=128)
     assert b._tree_conf.page_size == 512
     assert b._tree_conf.order == 100
-    assert b._tree_conf.key_size == 8
+    assert b._tree_conf.key_size == 16
     assert b._tree_conf.value_size == 128
     b.close()
 
@@ -106,7 +106,7 @@ def test_len_tree(b):
 
 
 def test_length_hint_tree():
-    b = BPlusTree(filename, key_size=16, value_size=16, order=100)
+    b = BPlusTree(filename, key_size=16, value_size=16, order=100, page_size=8192)
     assert b.__length_hint__() == 49
     b.insert(1, b'foo')
     assert b.__length_hint__() == 49
@@ -249,7 +249,7 @@ iterators = [
     list(range(0, 1000, 2)) + list(range(1, 1000, 2))
 ]
 orders = [3, 4, 50]
-page_sizes = [12288, 16384]
+page_sizes = [4096, 8192]
 key_sizes = [4, 16]
 values_sizes = [1, 16]
 serializer_class = [IntSerializer, StrSerializer]
@@ -276,11 +276,8 @@ def test_insert_split_in_tree(iterator, order, page_size, k_size, v_size,
                   key_size=k_size, value_size=v_size, cache_size=cache_size,
                   serializer=serialize_class())
 
-    if sorted(inserted) == inserted:
-        b.batch_insert(inserted)
-    else:
-        for k, v in inserted:
-            b.insert(k, v)
+    for k, v in inserted:
+        b.insert(k, v)
 
     # Reload tree from file before checking values
     b.close()
@@ -329,13 +326,13 @@ def test_overflow(b):
     with b._mem.read_transaction:
         assert b._read_from_overflow(first_overflow_page) == data
 
-    assert b._mem.last_page == 28
+    assert b._mem.last_page == 83
 
     with b._mem.write_transaction:
         b._delete_overflow(first_overflow_page)
 
     with b._mem.write_transaction:
-        for i in range(28, 2, -1):
+        for i in range(83, 2, -1):
             assert b._mem.next_available_page == i
 
 

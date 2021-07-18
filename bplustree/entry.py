@@ -191,9 +191,7 @@ class Reference(ComparableEntry):
         self.length = (
             2 * PAGE_REFERENCE_BYTES +
             USED_KEY_LENGTH_BYTES +
-            self._tree_conf.key_size +
-            USED_KEY_LENGTH_BYTES +
-            self._tree_conf.hash_size
+            self._tree_conf.key_size
         )
         self._data = data
 
