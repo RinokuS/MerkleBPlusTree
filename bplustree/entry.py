@@ -47,16 +47,15 @@ class Record(ComparableEntry):
     """A container for the actual data the tree stores."""
 
     __slots__ = ['_tree_conf', 'length', '_key', '_value', '_overflow_page',
-                 '_data', '_hash']
+                 '_data']
 
     def __init__(self, tree_conf: TreeConf, key=None,
                  value: Optional[bytes]=None, data: Optional[bytes]=None,
-                 overflow_page: Optional[int]=None, hash_="69217a3079908094e11121d042354a7c1f55b6482ca1a51e1b250dfd1ed0eef9"):
+                 overflow_page: Optional[int]=None):
         self._tree_conf = tree_conf
         self.length = (
             USED_KEY_LENGTH_BYTES + self._tree_conf.key_size +
             USED_VALUE_LENGTH_BYTES + self._tree_conf.value_size +
-            USED_KEY_LENGTH_BYTES + self._tree_conf.hash_size +
             PAGE_REFERENCE_BYTES
         )
         self._data = data
@@ -64,12 +63,10 @@ class Record(ComparableEntry):
         if self._data:
             self._key = NOT_LOADED
             self._value = NOT_LOADED
-            self._hash = NOT_LOADED
             self._overflow_page = NOT_LOADED
         else:
             self._key = key
             self._value = value
-            self._hash = hash_
             self._overflow_page = overflow_page
 
     @property
@@ -95,12 +92,6 @@ class Record(ComparableEntry):
         self._value = v
 
     @property
-    def hash_(self):
-        if self._hash == NOT_LOADED:
-            self.load(self._data)
-        return self._hash
-
-    @property
     def overflow_page(self):
         if self._overflow_page == NOT_LOADED:
             self.load(self._data)
@@ -123,24 +114,8 @@ class Record(ComparableEntry):
             data[end_used_key_length:end_key]
         )
 
-        start_used_hash_length = (
-            end_used_key_length + self._tree_conf.key_size
-        )
-        end_used_hash_length = (
-            start_used_hash_length + USED_KEY_LENGTH_BYTES
-        )
-        used_hash_length = int.from_bytes(
-            data[start_used_hash_length:end_used_hash_length], ENDIAN
-        )
-        assert 0 <= used_hash_length <= self._tree_conf.hash_size
-
-        end_hash = end_used_hash_length + used_hash_length
-        self._hash = self._tree_conf.hash_serializer.deserialize(
-            data[end_used_hash_length:end_hash]
-        )
-
         start_used_value_length = (
-            end_used_hash_length + self._tree_conf.hash_size
+            end_used_key_length + self._tree_conf.key_size
         )
         end_used_value_length = (
             start_used_value_length + USED_VALUE_LENGTH_BYTES
@@ -176,11 +151,6 @@ class Record(ComparableEntry):
         )
         used_key_length = len(key_as_bytes)
 
-        hash_as_bytes = self._tree_conf.hash_serializer.serialize(
-            self._hash, self._tree_conf.hash_size
-        )
-        used_hash_length = len(hash_as_bytes)
-
         overflow_page = self._overflow_page or 0
         if overflow_page:
             value = b''
@@ -192,10 +162,6 @@ class Record(ComparableEntry):
             used_key_length.to_bytes(USED_VALUE_LENGTH_BYTES, ENDIAN) +
             key_as_bytes +
             bytes(self._tree_conf.key_size - used_key_length) +
-
-            used_hash_length.to_bytes(USED_VALUE_LENGTH_BYTES, ENDIAN) +
-            hash_as_bytes +
-            bytes(self._tree_conf.hash_size - used_hash_length) +
 
             used_value_length.to_bytes(USED_VALUE_LENGTH_BYTES, ENDIAN) +
             value +
@@ -217,10 +183,10 @@ class Record(ComparableEntry):
 class Reference(ComparableEntry):
     """A container for a reference to other nodes."""
 
-    __slots__ = ['_tree_conf', 'length', '_key', '_before', '_after', '_data', '_hash']
+    __slots__ = ['_tree_conf', 'length', '_key', '_before', '_after', '_data']
 
     def __init__(self, tree_conf: TreeConf, key=None, before=None, after=None,
-                 data: bytes=None, hash_="69217a3079908094e11121d042354a7c1f55b6482ca1a51e1b250dfd1ed0eef9"):
+                 data: bytes=None):
         self._tree_conf = tree_conf
         self.length = (
             2 * PAGE_REFERENCE_BYTES +
@@ -235,12 +201,10 @@ class Reference(ComparableEntry):
             self._key = NOT_LOADED
             self._before = NOT_LOADED
             self._after = NOT_LOADED
-            self._hash = NOT_LOADED
         else:
             self._key = key
             self._before = before
             self._after = after
-            self._hash = hash_
 
     @property
     def key(self):
@@ -252,12 +216,6 @@ class Reference(ComparableEntry):
     def key(self, v):
         self._data = None
         self._key = v
-
-    @property
-    def hash_(self):
-        if self._hash == NOT_LOADED:
-            self.load(self._data)
-        return self._hash
 
     @property
     def before(self):
@@ -297,23 +255,7 @@ class Reference(ComparableEntry):
             data[end_used_key_length:end_key]
         )
 
-        start_used_hash_length = (
-                end_used_key_length + self._tree_conf.key_size
-        )
-        end_used_hash_length = (
-                start_used_hash_length + USED_KEY_LENGTH_BYTES
-        )
-        used_hash_length = int.from_bytes(
-            data[start_used_hash_length:end_used_hash_length], ENDIAN
-        )
-        assert 0 <= used_hash_length <= self._tree_conf.hash_size
-
-        end_hash = end_used_hash_length + used_hash_length
-        self._hash = self._tree_conf.hash_serializer.deserialize(
-            data[end_used_hash_length:end_hash]
-        )
-
-        start_after = end_used_hash_length + self._tree_conf.hash_size
+        start_after = end_used_key_length + self._tree_conf.key_size
         end_after = start_after + PAGE_REFERENCE_BYTES
         self._after = int.from_bytes(data[start_after:end_after], ENDIAN)
 
@@ -330,20 +272,11 @@ class Reference(ComparableEntry):
         )
         used_key_length = len(key_as_bytes)
 
-        hash_as_bytes = self._tree_conf.hash_serializer.serialize(
-            self._hash, self._tree_conf.hash_size
-        )
-        used_hash_length = len(hash_as_bytes)
-
         data = (
             self._before.to_bytes(PAGE_REFERENCE_BYTES, ENDIAN) +
             used_key_length.to_bytes(USED_VALUE_LENGTH_BYTES, ENDIAN) +
             key_as_bytes +
             bytes(self._tree_conf.key_size - used_key_length) +
-
-            used_hash_length.to_bytes(USED_VALUE_LENGTH_BYTES, ENDIAN) +
-            hash_as_bytes +
-            bytes(self._tree_conf.hash_size - used_hash_length) +
 
             self._after.to_bytes(PAGE_REFERENCE_BYTES, ENDIAN)
         )

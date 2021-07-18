@@ -4,12 +4,12 @@ import math
 from typing import Optional
 
 from .const import (ENDIAN, NODE_TYPE_BYTES, USED_PAGE_LENGTH_BYTES,
-                    PAGE_REFERENCE_BYTES, TreeConf)
+                    PAGE_REFERENCE_BYTES, TreeConf, USED_KEY_LENGTH_BYTES)
 from .entry import Entry, Record, Reference, OpaqueData
 
 
 class Node(metaclass=abc.ABCMeta):
-    __slots__ = ['_tree_conf', 'entries', 'page', 'parent', 'next_page']
+    __slots__ = ['_tree_conf', 'entries', 'page', 'parent', 'next_page', '_hash']
 
     # Attributes to redefine in inherited classes
     _node_type_int = 0
@@ -24,6 +24,8 @@ class Node(metaclass=abc.ABCMeta):
         self.page = page
         self.parent = parent
         self.next_page = next_page
+        self._hash = ''
+
         if data:
             self.load(data)
 
@@ -37,6 +39,23 @@ class Node(metaclass=abc.ABCMeta):
         self.next_page = int.from_bytes(
             data[end_used_page_length:end_header], ENDIAN
         )
+
+        start_used_hash_length = (
+                end_header + self._tree_conf.key_size
+        )
+        end_used_hash_length = (
+                start_used_hash_length + USED_KEY_LENGTH_BYTES
+        )
+        used_hash_length = int.from_bytes(
+            data[start_used_hash_length:end_used_hash_length], ENDIAN
+        )
+        assert 0 <= used_hash_length <= self._tree_conf.hash_size
+
+        end_hash = end_used_hash_length + used_hash_length
+        self._hash = self._tree_conf.hash_serializer.deserialize(
+            data[end_used_hash_length:end_hash]
+        )
+
         if self.next_page == 0:
             self.next_page = None
 
@@ -49,9 +68,9 @@ class Node(metaclass=abc.ABCMeta):
             entry_length = self._entry_class(self._tree_conf).length
         except AttributeError:
             # For Nodes that can hold a single variable sized Entry
-            entry_length = used_page_length - end_header
+            entry_length = used_page_length - end_hash
 
-        for start_offset in range(end_header, used_page_length, entry_length):
+        for start_offset in range(end_hash, used_page_length, entry_length):
             entry_data = data[start_offset:start_offset + entry_length]
             entry = self._entry_class(self._tree_conf, data=entry_data)
             self.entries.append(entry)

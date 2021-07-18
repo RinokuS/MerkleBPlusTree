@@ -1,3 +1,5 @@
+from hashlib import blake2b
+
 from functools import partial
 from logging import getLogger
 from typing import Optional, Union, Iterator, Iterable
