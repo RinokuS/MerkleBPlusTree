@@ -26,7 +26,7 @@ class BPlusTree:
     # ######################### Public API ################################
 
     def __init__(self, filename: str, page_size: int= 4096, order: int=100,
-                 key_size: int=16, value_size: int=16, cache_size: int=0,
+                 key_size: int=16, value_size: int=16, cache_size: int=64,
                  serializer: Optional[Serializer]=None):
         self._filename = filename
         self._tree_conf = TreeConf(
