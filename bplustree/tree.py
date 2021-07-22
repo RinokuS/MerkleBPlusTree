@@ -113,7 +113,6 @@ class BPlusTree:
 
             if node.can_add_entry:
                 node.insert_entry(record)
-                #self._mem.set_node(node)
             else:
                 node.insert_entry(record)
                 self._split_leaf(node)

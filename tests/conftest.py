@@ -3,7 +3,7 @@ from unittest import mock
 
 import pytest
 
-filename = '/tmp/bplustree-testfile1.index'
+filename = '/tmp/bplustree-testfile.index'
 
 
 @pytest.fixture(autouse=True)
